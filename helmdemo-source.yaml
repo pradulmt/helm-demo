@@ -1,0 +1,10 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: helmdemo
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  url: https://github.com/pradulmt/helm-demo
+
