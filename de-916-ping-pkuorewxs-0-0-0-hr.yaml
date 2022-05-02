@@ -1,0 +1,49 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: de-916-ping-pkuorewxs-0-0-0-hr
+  namespace: default
+spec:
+  chart:
+    spec:
+      chart: ./de-916-ping-pkuorewxs-0-0-0
+      sourceRef:
+        kind: GitRepository
+        name: de-916-ping-pkuorewxs-0-0-0-source
+  interval: 5m0s
+  releaseName: de-916-ping-pkuorewxs-0-0-0
+  values:
+    global:
+      namespace: default
+      nsId: be2cc146-f06c-46b4-a58f-b9306108969c
+    internalVldInterface: net1
+    ping:
+      image:
+        imagePullSecrets: []
+        pullPolicy: IfNotPresent
+        repository: artifactory.riftio.com/docker/rw.ping
+        tag: "2004"
+      metrics:
+        annotations:
+          path: /api/v1/ping/metrics
+          port: 18888
+          scrape: true
+        enabled: true
+      replicaCount: 1
+      serviceType: NodePort
+    pong:
+      image:
+        imagePullSecrets: []
+        pullPolicy: IfNotPresent
+        repository: artifactory.riftio.com/docker/rw.pong
+        tag: "2005"
+      metrics:
+        annotations:
+          path: /api/v1/pong/metrics
+          port: 18889
+          scrape: true
+        enabled: true
+      replicaCount: 1
+      serviceType: LoadBalancer
+
