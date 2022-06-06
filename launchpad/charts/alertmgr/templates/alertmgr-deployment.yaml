@@ -1,0 +1,84 @@
+# Copyright 2020 RIFT Inc
+# Copyright 2021 DZS Inc
+{{- $namespace := .Values.global.namespace.name -}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rw-alertmgr
+  namespace: {{ $namespace }}
+  labels:
+    app: rw.alertmgr
+spec:
+  selector:
+    matchLabels:
+      app: rw.alertmgr
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: rw.alertmgr
+        release: {{ .Release.Name }}
+    spec:
+      imagePullSecrets:
+        {{ if .Values.imagePullSecrets }}
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+        {{ else }}
+        {{- toYaml .Values.global.imagePullSecrets | nindent 8 }}
+        {{- end }}
+      containers:
+      - name: alertmgr
+        image: {{ .Values.alertmgr.image.repository -}} : {{- .Values.alertmgr.image.tag }}
+        imagePullPolicy: {{ .Values.alertmgr.image.pullPolicy }}
+        ports:
+        {{- range $name, $port := .Values.alertmgr.ports }}
+        - name: {{ $name }}
+          containerPort: {{ $port }}
+        {{- end }}
+
+        args:
+          - '--config.file=/config/alertmanager.yaml'
+          - '--storage.path=/alertmanager'
+        command:
+        - /bin/alertmanager
+
+        resources:
+          {}
+        volumeMounts:
+        - name: data-volume
+          mountPath: /alertmanager
+          readOnly: false
+
+        - name: config-volume
+          mountPath: /config
+
+      initContainers:
+      - name: init-alertmgr
+        image: {{ .Values.alertmgr.image.repository -}} : {{- .Values.alertmgr.image.tag }}
+        imagePullPolicy: {{ .Values.alertmgr.image.pullPolicy }}
+        command: ["/bin/sh"]
+        args: ["-c", 'while [ ! -f "/config/alertmanager.yaml" ]; do sleep 2; done']
+        volumeMounts:
+        - name: config-volume
+          mountPath: /config
+          readOnly: false
+
+      {{- with .Values.alertmgr.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.alertmgr.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.alertmgr.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      volumes:
+        - name: data-volume
+          emptyDir: {}
+        - name: config-volume
+          configMap:
+            name: alertmgr-config
