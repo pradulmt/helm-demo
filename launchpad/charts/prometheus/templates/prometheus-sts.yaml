@@ -1,0 +1,111 @@
+# Copyright 2020 RIFT Inc
+# Copyright 2021-2022 DZS Inc
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rw-prometheus
+  namespace: {{ .Values.global.namespace.name }}
+  labels:
+    app: rw.prometheus
+spec:
+  selector:
+    matchLabels:
+      app: rw.prometheus
+  replicas: 1
+  serviceName: {{ include "prometheus.fullname" . }}
+  template:
+    metadata:
+      labels:
+        app: rw.prometheus
+        release: {{ .Release.Name }}
+    spec:
+      imagePullSecrets:
+        {{ if .Values.imagePullSecrets }}
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+        {{ else }}
+        {{- toYaml .Values.global.imagePullSecrets | nindent 8 }}
+        {{- end }}
+
+      securityContext:
+        fsGroup: {{ .Values.podSecurityContext.fsGroup }}
+        runAsUser: {{ .Values.containerSecurityContext.runAsUser }}
+
+      initContainers:
+      - name: prometheus-prelaunch
+        image: {{ .Values.prometheus.busybox.image.repository }}
+        imagePullPolicy: {{ .Values.prometheus.busybox.image.pullPolicy }}
+        command: ["chown", "-R", "{{ .Values.containerSecurityContext.runAsUser }}:{{ .Values.podSecurityContext.fsGroup }}", /data]
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: data
+          mountPath: /data
+          readOnly: false
+
+      containers:
+      - name: prometheus
+        image: {{ .Values.prometheus.image.repository -}} : {{- .Values.prometheus.image.tag }}
+        imagePullPolicy: {{ .Values.prometheus.image.pullPolicy }}
+        ports:
+        {{- range $name, $port := .Values.prometheus.ports }}
+        - name: {{ $name }}
+          containerPort: {{ $port }}
+        {{- end }}
+
+        args:
+          - '--storage.tsdb.path=/data'
+          - '--web.enable-lifecycle'
+          - '--config.file=/etc/prometheus/prometheus.yaml'
+        command:
+        - /bin/prometheus
+
+        resources:
+          {}
+        volumeMounts:
+        - name: data
+          mountPath: /data
+          readOnly: false
+        - name: config
+          mountPath: /etc/prometheus
+
+      - name: config-watch
+        image: {{ .Values.prometheus.configWatch.image.repository -}} : {{- .Values.prometheus.configWatch.image.tag }}
+        imagePullPolicy: {{ .Values.prometheus.configWatch.image.pullPolicy }}
+        args: ["-v", "-t", "-p=/etc/prometheus", "curl", "-X", "POST", "--fail", "-o", "-", "-sS", "http://localhost:9090/-/reload"]
+        volumeMounts:
+        - name: config
+          mountPath: /etc/prometheus
+
+
+      {{- with .Values.prometheus.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.prometheus.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.prometheus.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      volumes:
+        - name: config
+          configMap:
+            defaultMode: 0644
+            name: rw-prometheus-conf
+        - name: script
+          configMap:
+            defaultMode: 0755
+            name: prometheus-prelaunch
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: {{ .Values.prometheusStorage.capacity }}
+      storageClassName: {{ .Values.prometheusStorage.storageClassName }}
