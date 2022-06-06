@@ -1,0 +1,22 @@
+# Copyright 2020 RIFT Inc
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "redis-tunnel.fullname" . }}
+  namespace: {{ .Values.global.namespace.name }}
+  labels:
+    app: rw.redis
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8014
+      targetPort: 8014
+      protocol: TCP
+      name: redis-tunnel
+    - port: 8013
+      targetPort: 8013
+      protocol: TCP
+      name: redis-tunnel-cli
+
+  selector:
+    app: rw.redis
